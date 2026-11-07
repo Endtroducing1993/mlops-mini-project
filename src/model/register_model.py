@@ -57,26 +57,27 @@ def load_model_info(file_path: str) -> dict:
         raise
 
 def register_model(model_name: str, model_info: dict):
-    """Register the model to the MLflow Model Registry."""
+    """Register the model and mark it as staging."""
     try:
         model_uri = f"runs:/{model_info['run_id']}/{model_info['model_path']}"
-        
-        # Register the model
+
+        # Step 1: register
         model_version = mlflow.register_model(model_uri, model_name)
-        
-        # Transition the model to "Staging" stage
+
+        # Step 2: move to "staging" using an alias
         client = mlflow.tracking.MlflowClient()
-        client.transition_model_version_stage(
+        client.set_registered_model_alias(
             name=model_name,
+            alias="staging",
             version=model_version.version,
-            stage="Staging"
         )
-        
-        logger.debug(f'Model {model_name} version {model_version.version} registered and transitioned to Staging.')
+
+        logger.debug(
+            f'Model {model_name} version {model_version.version} registered with alias "staging".'
+        )
     except Exception as e:
         logger.error('Error during model registration: %s', e)
         raise
-
 def main():
     try:
         model_info_path = 'reports/experiment_info.json'
