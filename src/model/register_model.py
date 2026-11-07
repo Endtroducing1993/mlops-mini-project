@@ -1,5 +1,3 @@
-# register model
-
 import json
 import mlflow
 import logging
@@ -11,6 +9,7 @@ load_dotenv()
 
 # Set up DagsHub credentials for MLflow tracking
 dagshub_token = os.getenv("DAGSHUB_PAT")
+
 if not dagshub_token:
     raise EnvironmentError("DAGSHUB_PAT environment variable is not set")
 
@@ -18,7 +17,7 @@ os.environ["MLFLOW_TRACKING_USERNAME"] = dagshub_token
 os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
 
 dagshub_url = "https://dagshub.com"
-repo_owner = "campusx-official"
+repo_owner = "Endtroducing1993"
 repo_name = "mlops-mini-project"
 
 # Set up MLflow tracking URI
@@ -59,13 +58,25 @@ def load_model_info(file_path: str) -> dict:
 def register_model(model_name: str, model_info: dict):
     """Register the model and mark it as staging."""
     try:
-        model_uri = f"runs:/{model_info['run_id']}/{model_info['model_path']}"
+        run_id = model_info['run_id']
+        source = f"runs:/{run_id}/{model_info['model_path']}"
 
-        # Step 1: register
-        model_version = mlflow.register_model(model_uri, model_name)
-
-        # Step 2: move to "staging" using an alias
         client = mlflow.tracking.MlflowClient()
+
+        # Make sure the registered model exists
+        try:
+            client.create_registered_model(model_name)
+        except mlflow.exceptions.MlflowException:
+            pass  # already exists
+
+        # Step 1: register (no logged-model lookup)
+        model_version = client.create_model_version(
+            name=model_name,
+            source=source,
+            run_id=run_id,
+        )
+
+        # Step 2: staging alias
         client.set_registered_model_alias(
             name=model_name,
             alias="staging",
@@ -78,16 +89,19 @@ def register_model(model_name: str, model_info: dict):
     except Exception as e:
         logger.error('Error during model registration: %s', e)
         raise
+
+
 def main():
     try:
         model_info_path = 'reports/experiment_info.json'
         model_info = load_model_info(model_info_path)
-        
+
         model_name = "my_model"
         register_model(model_name, model_info)
     except Exception as e:
         logger.error('Failed to complete the model registration process: %s', e)
         print(f"Error: {e}")
+        raise
 
 if __name__ == '__main__':
     main()
