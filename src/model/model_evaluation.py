@@ -16,8 +16,6 @@ load_dotenv()
 # Set up DagsHub credentials for MLflow tracking
 dagshub_token = os.getenv("DAGSHUB_PAT")
 
-
-
 if not dagshub_token:
     raise EnvironmentError("DAGSHUB_PAT environment variable is not set")
 
@@ -77,34 +75,39 @@ def load_data(file_path: str) -> pd.DataFrame:
         raise
 
 
-POS_LABEL = 'happiness'  # change to 'sadness' if you want that as the positive class
+POS_LABEL = 1
 
+def evaluate_model(clf, X_test, y_test):
 
-def evaluate_model(clf, X_test: np.ndarray, y_test: np.ndarray) -> dict:
-    """Evaluate the model and return the evaluation metrics."""
-    try:
-        y_pred = clf.predict(X_test)
+    y_pred = clf.predict(X_test)
 
-        # probability column that belongs to the positive class
-        pos_idx = list(clf.classes_).index(POS_LABEL)
-        y_pred_proba = clf.predict_proba(X_test)[:, pos_idx]
+    # Find the probability column for positive class
+    pos_idx = list(clf.classes_).index(POS_LABEL)
 
-        accuracy = accuracy_score(y_test, y_pred)
-        precision = precision_score(y_test, y_pred, pos_label=POS_LABEL)
-        recall = recall_score(y_test, y_pred, pos_label=POS_LABEL)
-        auc = roc_auc_score((np.asarray(y_test) == POS_LABEL).astype(int), y_pred_proba)
+    y_pred_proba = clf.predict_proba(X_test)[:, pos_idx]
 
-        metrics_dict = {
-            'accuracy': accuracy,
-            'precision': precision,
-            'recall': recall,
-            'auc': auc
-        }
-        logger.debug('Model evaluation metrics calculated')
-        return metrics_dict
-    except Exception as e:
-        logger.error('Error during model evaluation: %s', e)
-        raise
+    accuracy = accuracy_score(y_test, y_pred)
+
+    precision = precision_score(
+        y_test, y_pred, pos_label=POS_LABEL
+    )
+
+    recall = recall_score(
+        y_test, y_pred, pos_label=POS_LABEL
+    )
+
+    auc = roc_auc_score(
+        (np.asarray(y_test) == POS_LABEL).astype(int),
+        y_pred_proba
+    )
+
+    metrics_dict = {
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'auc': auc
+    }
+
 
 
 def save_metrics(metrics: dict, file_path: str) -> None:
