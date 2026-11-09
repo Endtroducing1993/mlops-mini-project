@@ -8,25 +8,23 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_a
 import logging
 import mlflow
 import mlflow.sklearn
+import dagshub
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
 
 # Set up DagsHub credentials for MLflow tracking
 dagshub_token = os.getenv("DAGSHUB_PAT")
-
 if not dagshub_token:
     raise EnvironmentError("DAGSHUB_PAT environment variable is not set")
 
 os.environ["MLFLOW_TRACKING_USERNAME"] = dagshub_token
 os.environ["MLFLOW_TRACKING_PASSWORD"] = dagshub_token
 
+dagshub_url = "https://dagshub.com"
 repo_owner = "Endtroducing1993"
 repo_name = "mlops-mini-project"
 
 # Set up MLflow tracking URI
-mlflow.set_tracking_uri(f"https://dagshub.com/{repo_owner}/{repo_name}.mlflow")
+mlflow.set_tracking_uri(f'{dagshub_url}/{repo_owner}/{repo_name}.mlflow')
 
 # logging configuration
 logger = logging.getLogger('model_evaluation')
@@ -45,7 +43,6 @@ file_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
-
 def load_model(file_path: str):
     """Load the trained model from a file."""
     try:
@@ -60,7 +57,6 @@ def load_model(file_path: str):
         logger.error('Unexpected error occurred while loading the model: %s', e)
         raise
 
-
 def load_data(file_path: str) -> pd.DataFrame:
     """Load data from a CSV file."""
     try:
@@ -74,43 +70,28 @@ def load_data(file_path: str) -> pd.DataFrame:
         logger.error('Unexpected error occurred while loading the data: %s', e)
         raise
 
+def evaluate_model(clf, X_test: np.ndarray, y_test: np.ndarray) -> dict:
+    """Evaluate the model and return the evaluation metrics."""
+    try:
+        y_pred = clf.predict(X_test)
+        y_pred_proba = clf.predict_proba(X_test)[:, 1]
 
-POS_LABEL = 'happiness'
+        accuracy = accuracy_score(y_test, y_pred)
+        precision = precision_score(y_test, y_pred)
+        recall = recall_score(y_test, y_pred)
+        auc = roc_auc_score(y_test, y_pred_proba)
 
-def evaluate_model(clf, X_test, y_test):
-
-    y_pred = clf.predict(X_test)
-
-    # Find the probability column for positive class
-    pos_idx = list(clf.classes_).index(POS_LABEL)
-
-    y_pred_proba = clf.predict_proba(X_test)[:, pos_idx]
-
-    accuracy = accuracy_score(y_test, y_pred)
-
-    precision = precision_score(
-        y_test, y_pred, pos_label=POS_LABEL
-    )
-
-    recall = recall_score(
-        y_test, y_pred, pos_label=POS_LABEL
-    )
-
-    auc = roc_auc_score(
-        (np.asarray(y_test) == POS_LABEL).astype(int),
-        y_pred_proba
-    )
-
-    metrics_dict = {
-        'accuracy': accuracy,
-        'precision': precision,
-        'recall': recall,
-        'auc': auc
-    }
-
-    return metrics_dict
-
-
+        metrics_dict = {
+            'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'auc': auc
+        }
+        logger.debug('Model evaluation metrics calculated')
+        return metrics_dict
+    except Exception as e:
+        logger.error('Error during model evaluation: %s', e)
+        raise
 
 def save_metrics(metrics: dict, file_path: str) -> None:
     """Save the evaluation metrics to a JSON file."""
@@ -121,7 +102,6 @@ def save_metrics(metrics: dict, file_path: str) -> None:
     except Exception as e:
         logger.error('Error occurred while saving the metrics: %s', e)
         raise
-
 
 def save_model_info(run_id: str, model_path: str, file_path: str) -> None:
     """Save the model run ID and path to a JSON file."""
@@ -134,50 +114,47 @@ def save_model_info(run_id: str, model_path: str, file_path: str) -> None:
         logger.error('Error occurred while saving the model info: %s', e)
         raise
 
-
 def main():
     mlflow.set_experiment("dvc-pipeline")
     with mlflow.start_run() as run:  # Start an MLflow run
         try:
             clf = load_model('./models/model.pkl')
             test_data = load_data('./data/processed/test_bow.csv')
-
+            
             X_test = test_data.iloc[:, :-1].values
             y_test = test_data.iloc[:, -1].values
 
             metrics = evaluate_model(clf, X_test, y_test)
-
+            
             save_metrics(metrics, 'reports/metrics.json')
-
+            
             # Log metrics to MLflow
             for metric_name, metric_value in metrics.items():
                 mlflow.log_metric(metric_name, metric_value)
-
+            
             # Log model parameters to MLflow
             if hasattr(clf, 'get_params'):
                 params = clf.get_params()
                 for param_name, param_value in params.items():
                     mlflow.log_param(param_name, param_value)
-
+            
             # Log model to MLflow
             mlflow.sklearn.log_model(clf, "model")
-
+            
             # Save model info
             save_model_info(run.info.run_id, "model", 'reports/experiment_info.json')
-
+            
             # Log the metrics file to MLflow
             mlflow.log_artifact('reports/metrics.json')
 
             # Log the model info file to MLflow
-            mlflow.log_artifact('reports/experiment_info.json')
+            mlflow.log_artifact('reports/model_info.json')
 
             # Log the evaluation errors log file to MLflow
             mlflow.log_artifact('model_evaluation_errors.log')
         except Exception as e:
             logger.error('Failed to complete the model evaluation process: %s', e)
             print(f"Error: {e}")
-            raise  # make sure DVC sees the failure
-
 
 if __name__ == '__main__':
     main()
