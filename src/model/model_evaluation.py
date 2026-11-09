@@ -75,7 +75,7 @@ def load_data(file_path: str) -> pd.DataFrame:
         raise
 
 
-POS_LABEL = 1
+POS_LABEL = 'happiness'
 
 def evaluate_model(clf, X_test, y_test):
 
@@ -107,6 +107,8 @@ def evaluate_model(clf, X_test, y_test):
         'recall': recall,
         'auc': auc
     }
+
+    return metrics_dict
 
 
 
