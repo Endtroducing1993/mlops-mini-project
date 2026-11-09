@@ -1,6 +1,2 @@
-import pickle, pandas as pd
-
-clf = pickle.load(open("models/model.pkl", "rb"))
-print("model classes:", clf.classes_)
-print("train labels:", pd.read_csv("data/processed/train_bow.csv").iloc[:, -1].unique())
-print("test labels:", pd.read_csv("data/processed/test_bow.csv").iloc[:, -1].unique())
+print("LOADED URI:", cls.new_model_uri)
+print("INPUT SCHEMA:", cls.new_model.metadata.get_input_schema())
